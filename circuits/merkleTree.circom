@@ -1,17 +1,16 @@
-pragma circom 2.0.0;
-include "../lib/poseidon.circom";
-include "../lib/bitify.circom";
+include "../node_modules/circomlib/circuits/mimcsponge.circom";
 
-// Computes Poseidon([left, right])
+// Computes MiMC([left, right])
 template HashLeftRight() {
     signal input left;
     signal input right;
     signal output hash;
 
-    component hasher = Poseidon(2);
-    hasher.inputs[0] <== left;
-    hasher.inputs[1] <== right;
-    hash <== hasher.out;
+    component hasher = MiMCSponge(2, 1);
+    hasher.ins[0] <== left;
+    hasher.ins[1] <== right;
+    hasher.k <== 0;
+    hash <== hasher.outs[0];
 }
 
 // if s == 0 returns [in[0], in[1]]
@@ -21,19 +20,18 @@ template DualMux() {
     signal input s;
     signal output out[2];
 
-    s * (1 - s) === 0;
+    s * (1 - s) === 0
     out[0] <== (in[1] - in[0])*s + in[0];
     out[1] <== (in[0] - in[1])*s + in[1];
 }
 
-// Computes and outputs a merkle root based on the provided merkle proof.
+// Verifies that merkle proof is correct for given merkle root and a leaf
 // pathIndices input is an array of 0/1 selectors telling whether given pathElement is on the left or right side of merkle path
-template RawMerkleTree(levels) {
+template MerkleTreeChecker(levels) {
     signal input leaf;
+    signal input root;
     signal input pathElements[levels];
     signal input pathIndices[levels];
-
-    signal output root;
 
     component selectors[levels];
     component hashers[levels];
@@ -49,24 +47,5 @@ template RawMerkleTree(levels) {
         hashers[i].right <== selectors[i].out[1];
     }
 
-    root <== hashers[levels - 1].hash;
-}
-
-template MerkleTree(levels) {
-    signal input leaf;
-    signal input pathElements[levels];
-    signal input pathIndices;
-    signal output root;
-
-    component indexBits = Num2Bits(levels);
-    indexBits.in <== pathIndices;
-
-    component tree = RawMerkleTree(levels);
-    tree.leaf <== leaf;
-    for (var i = 0; i < levels; i++) {
-        tree.pathIndices[i] <== indexBits.out[i];
-        tree.pathElements[i] <== pathElements[i];
-    }
-
-    root <== tree.root;
+    root === hashers[levels - 1].hash;
 }
